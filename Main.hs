@@ -1,6 +1,7 @@
 import Graphics.X11 (openDisplay, defaultScreenOfDisplay, screenNumberOfScreen
                     , getImage, getPixel, destroyImage, rootWindow, xyPixmap
-                    , widthOfScreen, heightOfScreen, Image, allPlanes_aux)
+                    , widthOfScreen, heightOfScreen, Image, allPlanes_aux
+                    , closeDisplay)
 
 import Data.Bits ((.&.), shiftR)
 import Data.Binary (Word8)
@@ -52,5 +53,6 @@ main = do
                   $ image
 
     destroyImage image
+    closeDisplay display
 
     return ()
