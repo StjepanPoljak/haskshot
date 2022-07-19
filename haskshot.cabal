@@ -6,8 +6,9 @@ executable haskshot
     main-is: Main.hs
     build-depends:
         base >= 4.8,
-        bmp >= 1.2,
         binary >= 0.8,
         bytestring >= 0.10,
         X11 >= 1.10,
-        containers >= 0.6
+        containers >= 0.6,
+        JuicyPixels >= 3.3,
+        primitive >= 0.7
