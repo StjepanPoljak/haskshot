@@ -14,16 +14,19 @@ import Data.Bool (bool)
 import Data.Function ((&))
 import Data.Maybe (isJust)
 
+import Data.Time (getCurrentTime)
+
 import qualified Data.Sequence as S (Seq, (|>), empty)
 import qualified Data.Foldable as F (toList)
 
 import Control.Monad.Primitive (PrimMonad)
-import Control.Monad (mapM_, liftM, when, (<=<))
+import Control.Monad (mapM_, liftM, when, (<=<), mzero)
 import Control.Concurrent (threadDelay, forkIO)
 import Control.Concurrent.MVar (isEmptyMVar, MVar, newEmptyMVar)
 
 import System.Environment (getArgs)
 import System.CPUTime (getCPUTime)
+import System.FilePath ((<.>), (</>))
 
 import HSOptions
 
@@ -44,7 +47,12 @@ packImage w h i = PT.newMutableImage w h
                                           . packPixel i $ (x, y))
                           [ (x, h - y - 1) | y <- [0..h-1], x <- [0..w-1] ]
 
-path = "/home/stjepan/test.bmp"
+getFName :: HShotOptions -> IO FilePath
+getFName opts = (flip liftM) getCurrentTime
+              $ (hs_path opts </>)
+              . (<.> getExtension opts)
+              . map (\c -> bool c '-' (c == ' '))
+              . show
 
 takeScreenshot :: Display -> Window -> Position -> Position
                -> Dimension -> Dimension -> IO (P.Image P.PixelRGB8)
@@ -90,20 +98,20 @@ mainLoop opts = do
                  , getPos (hs_y opts) (c_y - (div (fromIntegral h) 2))
                  )
 
+    path <- getFName opts
+
+    when (hs_test opts) $ const mzero <=< putStrLn . show $ opts
+
     runHSOperation (     P.writeBitmap path
                      =<< takeScreenshot display rootw x y w h
                    )
                    (\sec -> either putStrLn id
-                        <=< liftM (P.writeGifImages gifPath
-                                                    P.LoopingForever)
+                        <=< liftM (P.writeGifImages path P.LoopingForever)
                           $ record display rootw (hs_delay opts) sec x y w h
                    )
                    $ hs_op opts
 
     closeDisplay display
-
-gifPath :: FilePath
-gifPath = "/home/stjepan/test.gif"
 
 defaultPaletteOptions = P.PaletteOptions
     { P.paletteCreationMethod = P.MedianMeanCut
@@ -141,8 +149,9 @@ record' display rootw del delus rem x y w h part
                   $ shot
 
 main :: IO ()
-main = maybe invalidUsage (\opt -> bool (mainLoop opt) showHelp (hs_help opt))
-   =<< liftM ((flip parseArgs) defOptions) getArgs
-
-    where invalidUsage = putStrLn invalidUsageMsg
-                     >>= const (return ())
+main = maybe (putStrLn invalidUsageMsg >>= const (return ()))
+             (\opts -> bool (mainLoop opts)
+                            (showHelp opts)
+                            (hs_help opts))
+   =<< (\opts -> liftM ((flip parseArgs) opts) getArgs)
+   =<< readConfig
