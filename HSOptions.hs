@@ -48,6 +48,9 @@ optList = [ ('x', ( (\opts -> liftM (\res -> opts { hs_x = res } )
                             . readsMaybe )
             , "record as gif (in seconds)", HSOption)
             )
+          , ('R', ( (\opts -> const $ Just $ opts { hs_op = HSRecordDef } )
+            , "record as gif (default duration)", HSSwitch)
+            )
           , ('d', ( (\opts -> liftM (\res -> opts { hs_delay = res } )
                             . readsMaybe )
             , "delay between frames (in 1/100 of seconds)", HSOption)
@@ -125,7 +128,7 @@ readHSDimension str = bool (return . HSSize =<< readsMaybe str)
                            (Just HSSpan) (str == "s")
 data HSOperation = HSScreenshot
                  | HSRecord Int
-                 | HSRecLoop
+                 | HSRecordDef
                  deriving (Eq, Show)
 
 instance Read HSOperation where
@@ -222,11 +225,21 @@ parseArgs' (x:xs) part = (mfilter (=='-') . head' . take 1) x
           first (x, _, _) = x
           third (_, _, x) = x
 
+isRecDef :: HSOperation -> Bool
+isRecDef HSRecordDef = True
+isRecDef _ = False
+
 parseArgs :: [String] -> HShotOptions -> Maybe HShotOptions
 parseArgs args opts = parseArgs' args opts
-                  >>= \opts' -> Just $ bool (opts' { hs_op = HSScreenshot })
-                                            opts'
-                                     $ elem "-r" args
+                  >>= \opts' -> Just
+                              $ bool (opts' { hs_op = bool HSScreenshot
+                                                           (hs_op opts)
+                                                    . isRecDef
+                                                    . hs_op
+                                                    $ opts' })
+                                     opts'
+                              . elem "-r"
+                              $ args
 
 showHelpFor ch = map (\(opt, (_, help, _)) -> "\t" ++ (ch:opt:"\t") ++ help)
 
@@ -235,7 +248,7 @@ showHelp opts = mapM_ putStrLn $ concat
     [ [ "haskshot - minimalistic screenshot and gif recording application"
       , "           for X server"
       , ""
-      , "haskshot [-r <time>] [-d <gif delay>]"
+      , "haskshot [-r <time>|-R] [-d <gif delay>]"
       , "\t[-x <x position>] [-y <y position>]"
       , "\t[-W <width>] [-H <height>] [-t] [-h]"
       , ""

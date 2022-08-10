@@ -22,7 +22,7 @@ import qualified Data.Foldable as F (toList)
 import Control.Monad.Primitive (PrimMonad)
 import Control.Monad (mapM_, liftM, when, (<=<), mzero)
 import Control.Concurrent (threadDelay, forkIO)
-import Control.Concurrent.MVar (isEmptyMVar, MVar, newEmptyMVar)
+import Control.Concurrent.MVar (putMVar, tryReadMVar, MVar, newEmptyMVar)
 
 import System.Environment (getArgs)
 import System.CPUTime (getCPUTime)
@@ -121,32 +121,33 @@ defaultPaletteOptions = P.PaletteOptions
 
 type GifData = (P.Palette, P.GifDelay, P.Image P.Pixel8)
 
-partGifDataToGifData :: P.GifDelay -> (P.Image P.Pixel8, P.Palette) -> GifData
-partGifDataToGifData del (img, pal) = (pal, del, img)
-
 record :: Display -> Window -> Int -> Int -> Position -> Position
             -> Dimension -> Dimension -> IO [GifData]
-record display rootw del dur x y w h = record' display rootw del (del * 10000)
-                                               (dur * 1000000) x y w h S.empty
+record display rootw del dur x y w h = do
+        stopVar <- newEmptyMVar
+        forkIO $ do threadDelay (dur * (10^6))
+                    putMVar stopVar ()
+        record' display rootw del (del * (10^4))
+                x y w h stopVar S.empty
 
-record' :: Display -> Window -> Int -> Int -> Int -> Position -> Position
-        -> Dimension -> Dimension -> S.Seq (GifData) -> IO [GifData]
-record' display rootw del delus rem x y w h part
-    | rem <= 0  = return $ F.toList part
-    | otherwise = do
-            start   <- getCPUTime
-            shot    <- takeScreenshot display rootw x y w h
-            end     <- getCPUTime
-            threadDelay . minimum
-                        . map abs
-                        $ [ 0
-                          , delus - fromInteger ((end - start) `div` 1000000)
-                          ]
-            record' display rootw del delus (rem - delus) x y w h
-                  . (S.|>) part
-                  . partGifDataToGifData del
-                  . P.palettize defaultPaletteOptions
-                  $ shot
+record' :: Display -> Window -> Int -> Int -> Position -> Position
+        -> Dimension -> Dimension -> MVar () -> S.Seq (GifData) -> IO [GifData]
+record' display rootw del delus x y w h var part = do
+    start   <- getCPUTime
+    shot    <- takeScreenshot display rootw x y w h
+    end     <- getCPUTime
+    threadDelay . maximum
+                . filter (<0)
+                $ [ 0
+                  , delus - fromInteger ((end - start) `div` 1000000)
+                  ]
+    tryReadMVar var >>= \stopCond -> case stopCond of
+        Just () -> return $ F.toList part
+        Nothing -> record' display rootw del delus x y w h var
+                 . (S.|>) part
+                 . (\(img, pal) -> (pal, del, img))
+                 . P.palettize defaultPaletteOptions
+                 $ shot
 
 main :: IO ()
 main = maybe (putStrLn invalidUsageMsg >>= const (return ()))
