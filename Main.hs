@@ -14,7 +14,7 @@ import Data.Bool (bool)
 import Data.Function ((&))
 import Data.Maybe (isJust)
 
-import Data.Time (getCurrentTime)
+import Data.Time (getZonedTime)
 
 import qualified Data.Sequence as S (Seq, (|>), empty)
 import qualified Data.Foldable as F (toList)
@@ -48,7 +48,7 @@ packImage w h i = PT.newMutableImage w h
                           [ (x, h - y - 1) | y <- [0..h-1], x <- [0..w-1] ]
 
 getFName :: HShotOptions -> IO FilePath
-getFName opts = (flip liftM) getCurrentTime
+getFName opts = (flip liftM) getZonedTime
               $ (hs_path opts </>)
               . (<.> getExtension opts)
               . map (\c -> bool c '-' (c == ' '))
