@@ -55,6 +55,9 @@ optList = [ ('x', ( (\opts -> liftM (\res -> opts { hs_x = res } )
                             . readsMaybe )
             , "delay between frames (in 1/100 of seconds)", HSOption)
             )
+          , ('o', ( (\opts -> (\res -> return $ opts { hs_path = res } ) )
+            , "output directory", HSOption)
+            )
           , ('t', ( (\opts -> const $ Just $ opts { hs_test = True } )
             , "test / debug mode", HSSwitch)
             )
@@ -79,6 +82,7 @@ getConfigParameters = [ ("rec_time",    (show . recTime,    'r'))
                       , ("y",           (argPos . hs_y,     'y'))
                       , ("width",       (argDim . hs_w,     'W'))
                       , ("height",      (argDim . hs_h,     'H'))
+                      , ("out_dir",     (hs_path,           'o'))
                       ]
 
 data HShotOptions = HShotOptions { hs_x     :: HSPosition
@@ -186,9 +190,9 @@ readConfig :: IO HShotOptions
 readConfig = do
     dir <- getAppUserDataDirectory appName
     createDirectoryIfMissing False dir
-    (\fp -> (\opts -> return $ opts { hs_path = dir })
-        =<< bool (const (return defOptions)
-                    =<< writeConfigFromOptions fp defOptions)
+    (\fp -> bool ((\opts -> const (return opts)
+                    =<< writeConfigFromOptions fp opts
+                  ) $ defOptions { hs_path = dir })
                  (liftM parseConfig $ readFile fp)
         =<< doesFileExist fp) . (</>) dir
                               $ defConfigName
